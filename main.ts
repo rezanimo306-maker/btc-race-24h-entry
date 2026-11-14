@@ -1,20 +1,21 @@
 // Washout-dip cbBTC bot — buys outsized dips below the 8-hour mean and rides the
-// snap-back, with a small pullback sleeve for uptrends and a late momentum fallback
+// snap-back, with a deep-pullback sleeve for uptrends and a late momentum fallback
 // so the bot always takes at least one trade per 24h window.
 //
 // Dev-window behaviour (frozen 24h, $1,000 start, all fees/slippage/impact):
-//   net PnL +$16.01, 3 trades, max drawdown -0.73% (local replay; see README).
-//   Trade 1: washout buy after the early sell-off, +1.04%.
-//   Trade 2: small pullback buy, -0.85% (stop hit).
-//   Trade 3: washout buy into the late dip, +0.95%.
+//   net PnL +$18.85, 2 round trips (4 fills), win rate 100%, max drawdown -0.73%
+//   (grade-local --driver process; see README). Trade 1: washout buy after the
+//   early sell-off, +1.04%. Trade 2: washout buy into the late dip, +0.95%.
+//   The old 1.3%/25% pullback sleeve lost money on dev (-$2.34, 0 wins in 1 trade),
+//   so it now only fires on deeper 1.6% pullbacks, at 50% size, for uptrend windows.
 //
 // Rules (all comparisons in exact bigint arithmetic; no floats, no clock, no
 // randomness — two runs on the same bars produce identical orders):
-//   WASHOUT (primary): close <= SMA480 * (1 - 1.2%) AND close > previous close
+//   WASHOUT (primary): close <= SMA480 * (1 - 1.3%) AND close > previous close
 //     -> buy 100% of cash. Exit: +1.0% take-profit, -1.2% stop, 1.0% trailing
 //     stop from the peak mark, or 480 bars max hold.
-//   PULLBACK (secondary): close > SMA480 AND close <= 60-bar high * (1 - 1.3%)
-//     AND close > previous close -> buy 25% of cash. Exit: +0.8% / -0.8% /
+//   PULLBACK (secondary): close > SMA480 AND close <= 60-bar high * (1 - 1.6%)
+//     AND close > previous close -> buy 50% of cash. Exit: +0.8% / -0.8% /
 //     0.8% trailing / 240 bars max hold.
 //   FALLBACK: if no buy has filled by the 1000th bar seen and EMA8 crosses above
 //     EMA21 -> buy 50% of cash. Exit: +0.8% / -0.8% / 0.8% trailing / 240 bars.
@@ -35,15 +36,15 @@ const COOLDOWN_BARS = 3;
 const FALLBACK_BAR = 1000;
 
 // Washout rule (percentages in basis points of the slow mean / entry value).
-const WASHOUT_DIP_BPS = 120; // buy 1.2% below SMA480
+const WASHOUT_DIP_BPS = 130; // buy 1.3% below SMA480 (plateau 1.2-1.35% all pass; 1.3 is its centre)
 const WASHOUT_TP_BPS = 100; // +1.0% take-profit
 const WASHOUT_SL_BPS = 120; // -1.2% stop-loss
 const WASHOUT_TRAIL_BPS = 100; // 1.0% trailing stop
 const WASHOUT_MAX_HOLD = 480;
 
 // Pullback rule.
-const PULLBACK_DIP_BPS = 130; // 1.3% below the 60-bar high
-const PULLBACK_SIZE_BPS = 2500; // 25% of cash
+const PULLBACK_DIP_BPS = 160; // 1.6% below the 60-bar high (the 1.3% sleeve lost money on dev; 1.6% only fires on deep pullbacks)
+const PULLBACK_SIZE_BPS = 5000; // 50% of cash (uptrend sleeve: the washout rule rarely fires in an uptrend, so the sleeve carries the upside there)
 const PULLBACK_TP_BPS = 80;
 const PULLBACK_SL_BPS = 80;
 const PULLBACK_TRAIL_BPS = 80;
